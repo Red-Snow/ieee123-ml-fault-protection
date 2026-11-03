@@ -1,0 +1,6 @@
+task,model,protocol,held_out,acc,f1_macro,n_test
+zone,TopologyAware-HGB,loto,T0_base,0.9933054393305439,0.9935557088538104,4780
+zone,TopologyAware-HGB,loto,T1_sw7_sw5,0.9913312693498452,0.9911256066529204,4845
+zone,TopologyAware-HGB,loto,T2_sw7_sw3,0.9890298989029899,0.9903059481252654,4649
+zone,TopologyAware-HGB,loto,T3_loop,0.9316185696361355,0.9308364919920162,4782
+zone,TopologyAware-HGB,loto,T4_sw8_l93,0.9896028280307756,0.9900091866595575,4809

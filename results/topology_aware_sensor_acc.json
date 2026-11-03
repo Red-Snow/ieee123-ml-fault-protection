@@ -1,0 +1,22 @@
+[
+  {
+    "held_out": "T0_base",
+    "sensor_acc": 0.9920240585774058
+  },
+  {
+    "held_out": "T1_sw7_sw5",
+    "sensor_acc": 0.9890350877192983
+  },
+  {
+    "held_out": "T2_sw7_sw3",
+    "sensor_acc": 0.9834372983437298
+  },
+  {
+    "held_out": "T3_loop",
+    "sensor_acc": 0.8635246758678378
+  },
+  {
+    "held_out": "T4_sw8_l93",
+    "sensor_acc": 0.991448326055313
+  }
+]
