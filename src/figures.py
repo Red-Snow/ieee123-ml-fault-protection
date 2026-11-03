@@ -24,15 +24,20 @@ plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 10, "axes.edgecolor": GRID, "axes.labelcolor": INK2,
     "xtick.color": INK2, "ytick.color": INK2, "axes.spines.top": False, "axes.spines.right": False,
     "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.8, "axes.axisbelow": True,
-    "svg.fonttype": "none", "figure.facecolor": "#fcfcfb", "axes.facecolor": "#fcfcfb",
+    "svg.fonttype": "none", "svg.hashsalt": "ieee123", "figure.facecolor": "#fcfcfb", "axes.facecolor": "#fcfcfb",
 })
 TOPO_LABEL = {"T0_base": "T0\nbase", "T1_sw7_sw5": "T1\nSw7 in, Sw5 out", "T2_sw7_sw3": "T2\nSw7 in, Sw3 out",
               "T3_loop": "T3\nlooped", "T4_sw8_l93": "T4\nSw8 in, L93 out"}
 
 
 def save(fig, name):
-    fig.savefig(os.path.join(FIG, name), bbox_inches="tight")
+    import re
+    path = os.path.join(FIG, name)
+    fig.savefig(path, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
+    # round coordinates to 0.1 px: same picture, smaller files, stable diffs
+    head, body = open(path).read().split("</metadata>", 1)
+    open(path, "w").write(head + "</metadata>" + re.sub(r"(-?\d+\.\d)\d+", r"\1", body))
     print("wrote", name)
 
 
@@ -53,13 +58,12 @@ def zone_gap():
         if i == 3:
             for xi, v in zip(x, vals):
                 ax.text(xi + (i - 1.5) * w, v + 1, f"{v:.0f}", ha="center", va="bottom", fontsize=8, color=INK)
-    ax.axhline(100 * rand, color=INK2, lw=1, ls="--")
-    ax.text(-0.45, 100 * rand + 1.5, f"Random 80/20 split, all layouts mixed: {100*rand:.1f}%", ha="left", fontsize=8, color=INK2)
+    ax.axhline(100 * rand, color=INK2, lw=1, ls="--", label=f"Best model, random 80/20 split with layouts mixed ({100*rand:.1f}%)")
     ax.set_xticks(x, [TOPO_LABEL[t] for t in topos], fontsize=8.5)
     ax.set_ylim(0, 108)
     ax.set_ylabel("Fault-zone accuracy on the unseen layout (%)")
     ax.set_title("Zone localisation when the grid layout was never seen in training", loc="left", color=INK, fontsize=11)
-    ax.legend(frameon=False, ncol=4, fontsize=8.5, loc="lower center", bbox_to_anchor=(0.5, -0.32))
+    ax.legend(frameon=False, ncol=3, fontsize=8.5, loc="lower center", bbox_to_anchor=(0.5, -0.38))
     save(fig, "zone_generalisation.svg")
 
 
@@ -85,48 +89,68 @@ def fdia():
 
 
 def feeder_map():
+    """Hand-written compact SVG (the matplotlib version is ~50 KB)."""
     from sim import I_SENSORS, V_SENSORS, compute_zones
+    import opendssdirect as dss
     coords = pd.read_csv(os.path.join(ROOT, "feeder", "BusCoords.dat"), sep=r"[\s,]+", header=None,
                          names=["bus", "x", "y"], engine="python", dtype={"bus": str})
     coords["bus"] = coords.bus.str.lower()
     zones = compute_zones()
-    import opendssdirect as dss
-    fig, ax = plt.subplots(figsize=(8, 7))
     xy = coords.set_index("bus")[["x", "y"]]
+    x0, x1, y0, y1 = xy.x.min(), xy.x.max(), xy.y.min(), xy.y.max()
+    W, PAD, TOP = 620, 20, 40
+    k = (W - 2 * PAD) / (x1 - x0)
+    H = int(TOP + (y1 - y0) * k + 2 * PAD + 30)
+    P = lambda b: (round(PAD + (xy.loc[b, "x"] - x0) * k, 1), round(TOP + (y1 - xy.loc[b, "y"]) * k, 1))
+    segs = []
     for name in dss.Circuit.AllElementNames():
         if not name.lower().startswith(("line.", "transformer.")):
             continue
         dss.Circuit.SetActiveElement(name)
         b = [s.split(".")[0].lower() for s in dss.CktElement.BusNames()]
-        b = [k[:-1] if k not in xy.index and k.endswith("r") else k for k in b]  # regulator output buses
-        if all(k in xy.index for k in b):
-            ax.plot(xy.loc[b, "x"], xy.loc[b, "y"], color="#c9c8c2", lw=1.2, zorder=1)
-    for a, bb in [("151", "300"), ("54", "94")]:  # normally-open tie switches Sw7, Sw8
-        ax.plot(xy.loc[[a, bb], "x"], xy.loc[[a, bb], "y"], color=INK2, lw=1.4, ls="--", zorder=1)
+        b = [q[:-1] if q not in xy.index and q.endswith("r") else q for q in b]
+        if len(b) == 2 and all(q in xy.index for q in b) and b[0] != b[1]:
+            (ax_, ay), (bx, by) = P(b[0]), P(b[1])
+            segs.append(f"M{ax_} {ay}L{bx} {by}")
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+         f'font-family="DejaVu Sans, Arial, sans-serif">',
+         f'<rect width="{W}" height="{H}" fill="#fcfcfb"/>',
+         f'<text x="{PAD}" y="22" font-size="14" fill="{INK}">IEEE 123-node feeder: protection zones and the 23 sensors</text>',
+         f'<path d="{"".join(segs)}" stroke="#c9c8c2" stroke-width="1.5" fill="none"/>']
+    tie = "".join(f"M{P(a)[0]} {P(a)[1]}L{P(b)[0]} {P(b)[1]}" for a, b in [("151", "300"), ("54", "94")])
+    o.append(f'<path d="{tie}" stroke="{INK2}" stroke-width="1.6" stroke-dasharray="5 3" fill="none"/>')
     zc = {"Z1": C[0], "Z2": C[1], "Z3": C[2], "Z4": C[6], "Z5": C[4]}
     for z, col in zc.items():
-        bs = [b for b, zz in zones.items() if zz == z and b in xy.index]
-        ax.scatter(xy.loc[bs, "x"], xy.loc[bs, "y"], s=18, color=col, zorder=3, edgecolor="#fcfcfb", linewidth=0.6)
-        cx, cy = xy.loc[bs, "x"].mean(), xy.loc[bs, "y"].mean()
-        ax.text(cx, cy, z, fontsize=13, weight="bold", color=INK, zorder=5, ha="center",
-                bbox=dict(boxstyle="round,pad=0.2", fc="#fcfcfb", ec=col, lw=1.5))
-    vs = [b.lower() for b in V_SENSORS if b.lower() in xy.index]
-    ax.scatter(xy.loc[vs, "x"], xy.loc[vs, "y"], s=90, facecolor="none", edgecolor=INK, lw=1.3, zorder=4, label="Voltage sensor (bus)")
+        bs = sorted(b for b, zz in zones.items() if zz == z and b in xy.index)
+        o.append(f'<g fill="{col}" stroke="#fcfcfb" stroke-width="0.8">'
+                 + "".join(f'<circle cx="{P(b)[0]}" cy="{P(b)[1]}" r="3"/>' for b in bs) + "</g>")
+    o.append(f'<g fill="none" stroke="{INK}" stroke-width="1.5">'
+             + "".join(f'<circle cx="{P(b.lower())[0]}" cy="{P(b.lower())[1]}" r="7"/>' for b in V_SENSORS) + "</g>")
     for el in I_SENSORS:
         dss.Circuit.SetActiveElement(f"Line.{el}")
         b = [s.split(".")[0].lower() for s in dss.CktElement.BusNames()]
-        b = [k for k in b if k in xy.index]
-        if b:
-            p = xy.loc[b].mean()
-            ax.scatter(p.x, p.y, marker="s", s=55, color=INK, zorder=4)
-            ax.annotate(el, (p.x, p.y), xytext=(4, 4), textcoords="offset points", fontsize=7.5, color=INK)
-    ax.scatter([], [], marker="s", s=55, color=INK, label="Current sensor (line)")
-    ax.plot([], [], color=INK2, ls="--", label="Normally-open tie switch")
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.legend(frameon=False, loc="lower left", fontsize=8.5)
-    ax.set_title("IEEE 123-node feeder: protection zones and the 23 sensors", loc="left", color=INK, fontsize=11)
-    save(fig, "feeder_map.svg")
+        b = [q for q in b if q in xy.index]
+        px = round(np.mean([P(q)[0] for q in b]), 1)
+        py = round(np.mean([P(q)[1] for q in b]), 1)
+        o.append(f'<rect x="{round(px - 5, 1)}" y="{round(py - 5, 1)}" width="10" height="10" fill="{INK}"/>'
+                 f'<text x="{round(px + 7, 1)}" y="{round(py - 6, 1)}" font-size="10" fill="{INK}">{el}</text>')
+    for z, col in zc.items():
+        bs = sorted(b for b, zz in zones.items() if zz == z and b in xy.index)
+        cx = round(np.mean([P(b)[0] for b in bs]), 1)
+        cy = round(np.mean([P(b)[1] for b in bs]), 1)
+        o.append(f'<rect x="{round(cx - 17, 1)}" y="{round(cy - 13, 1)}" width="34" height="24" rx="4" fill="#fcfcfb" stroke="{col}" stroke-width="2"/>'
+                 f'<text x="{cx}" y="{round(cy + 5, 1)}" font-size="15" font-weight="bold" text-anchor="middle" fill="{INK}">{z}</text>')
+    ly = H - 18
+    o.append(f'<circle cx="{PAD + 7}" cy="{ly}" r="7" fill="none" stroke="{INK}" stroke-width="1.5"/>'
+             f'<text x="{PAD + 20}" y="{ly + 4}" font-size="11" fill="{INK}">Voltage sensor (bus)</text>'
+             f'<rect x="{PAD + 160}" y="{ly - 5}" width="10" height="10" fill="{INK}"/>'
+             f'<text x="{PAD + 176}" y="{ly + 4}" font-size="11" fill="{INK}">Current sensor (line)</text>'
+             f'<path d="M{PAD + 320} {ly}h22" stroke="{INK2}" stroke-width="1.6" stroke-dasharray="5 3"/>'
+             f'<text x="{PAD + 348}" y="{ly + 4}" font-size="11" fill="{INK}">Normally-open tie switch</text>')
+    o.append("</svg>\n")
+    with open(os.path.join(FIG, "feeder_map.svg"), "w") as fh:
+        fh.write("\n".join(o))
+    print("wrote feeder_map.svg")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,116 @@
+{
+  "detection": {
+    "HistGradBoost": {
+      "loto": {
+        "acc_mean": 0.9935,
+        "acc_min": 0.981,
+        "f1_macro_mean": 0.9901
+      },
+      "random": {
+        "acc_mean": 0.9985,
+        "acc_min": 0.9985,
+        "f1_macro_mean": 0.9977
+      }
+    },
+    "MLP": {
+      "loto": {
+        "acc_mean": 0.9616,
+        "acc_min": 0.9088,
+        "f1_macro_mean": 0.9337
+      },
+      "random": {
+        "acc_mean": 0.9953,
+        "acc_min": 0.9953,
+        "f1_macro_mean": 0.9929
+      }
+    },
+    "RandomForest": {
+      "loto": {
+        "acc_mean": 0.9963,
+        "acc_min": 0.9925,
+        "f1_macro_mean": 0.9944
+      },
+      "random": {
+        "acc_mean": 0.9983,
+        "acc_min": 0.9983,
+        "f1_macro_mean": 0.9974
+      }
+    }
+  },
+  "type": {
+    "HistGradBoost": {
+      "loto": {
+        "acc_mean": 0.9983,
+        "acc_min": 0.9977,
+        "f1_macro_mean": 0.9984
+      },
+      "random": {
+        "acc_mean": 0.9979,
+        "acc_min": 0.9979,
+        "f1_macro_mean": 0.9981
+      }
+    },
+    "MLP": {
+      "loto": {
+        "acc_mean": 0.997,
+        "acc_min": 0.9942,
+        "f1_macro_mean": 0.9972
+      },
+      "random": {
+        "acc_mean": 0.9975,
+        "acc_min": 0.9975,
+        "f1_macro_mean": 0.9977
+      }
+    },
+    "RandomForest": {
+      "loto": {
+        "acc_mean": 0.9969,
+        "acc_min": 0.995,
+        "f1_macro_mean": 0.997
+      },
+      "random": {
+        "acc_mean": 0.9964,
+        "acc_min": 0.9964,
+        "f1_macro_mean": 0.9967
+      }
+    }
+  },
+  "zone": {
+    "HistGradBoost": {
+      "loto": {
+        "acc_mean": 0.9014,
+        "acc_min": 0.776,
+        "f1_macro_mean": 0.8336
+      },
+      "random": {
+        "acc_mean": 0.9973,
+        "acc_min": 0.9973,
+        "f1_macro_mean": 0.9973
+      }
+    },
+    "MLP": {
+      "loto": {
+        "acc_mean": 0.8696,
+        "acc_min": 0.6558,
+        "f1_macro_mean": 0.8066
+      },
+      "random": {
+        "acc_mean": 0.9849,
+        "acc_min": 0.9849,
+        "f1_macro_mean": 0.9834
+      }
+    },
+    "RandomForest": {
+      "loto": {
+        "acc_mean": 0.8768,
+        "acc_min": 0.6543,
+        "f1_macro_mean": 0.8154
+      },
+      "random": {
+        "acc_mean": 0.9946,
+        "acc_min": 0.9946,
+        "f1_macro_mean": 0.9939
+      }
+    }
+  }
+}
