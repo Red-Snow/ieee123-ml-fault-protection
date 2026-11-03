@@ -2,3 +2,7 @@ data/
 __pycache__/
 *.log
 results/predictions_loto.csv.gz
+feeder/*.dss
+feeder/*.DSS
+feeder/BusCoords.dat
+feeder/LICENSE-OpenDSS.txt
