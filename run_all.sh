@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Full pipeline: simulate -> train -> topology-aware model -> attack study -> figures
+# Full pipeline: fetch feeder -> simulate -> benchmark -> topology-aware zone -> FDIA -> figures
+# Extra arguments are passed through, e.g.  bash run_all.sh --quick
 set -euo pipefail
 cd "$(dirname "$0")"
-bash feeder/fetch_feeder.sh
-python src/generate.py --per-topo 6000
-python src/train.py
-python src/topo_aware.py
-python src/attack.py
-python src/figures.py
+PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}" python -m ieee123fp all "$@"

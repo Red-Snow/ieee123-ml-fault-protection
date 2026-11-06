@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ieee123fp"
+version = "1.1.0"
+description = "ML fault protection on the IEEE 123-node feeder under unseen grid layouts and false-data attacks"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Farman Ullah Khan" }]
+requires-python = ">=3.11"
+dependencies = [
+    "opendssdirect.py==0.9.4",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn==1.9.1",
+    "networkx>=3.3",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+ieee123fp = "ieee123fp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: end-to-end smoke run on a tiny simulated dataset (~1 min)"]
+
+[tool.ruff]
+line-length = 130
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E731", "B023", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/ieee123fp/figures.py" = ["E501"]  # hand-written SVG strings

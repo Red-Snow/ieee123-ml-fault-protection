@@ -1,22 +1,23 @@
 """Make the README figures (SVG) from the saved result files. No retraining needed."""
 from __future__ import annotations
 
-import os
-import sys
+import logging
+import re
+from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+import opendssdirect as dss  # noqa: E402
 import pandas as pd  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(__file__))
-from data import ROOT  # noqa: E402
+from .config import FEEDER_DIR, I_SENSORS, V_SENSORS, Paths  # noqa: E402
+from .grid import compile_feeder, compute_zones, element_buses  # noqa: E402
+from .models.baselines import MODEL_LABELS  # noqa: E402
 
-RES = os.path.join(ROOT, "results")
-FIG = os.path.join(ROOT, "figures")
-os.makedirs(FIG, exist_ok=True)
+log = logging.getLogger(__name__)
 
 C = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
@@ -30,25 +31,22 @@ TOPO_LABEL = {"T0_base": "T0\nbase", "T1_sw7_sw5": "T1\nSw7 in, Sw5 out", "T2_sw
               "T3_loop": "T3\nlooped", "T4_sw8_l93": "T4\nSw8 in, L93 out"}
 
 
-def save(fig, name):
-    import re
-    path = os.path.join(FIG, name)
+def save(fig, path: Path):
     fig.savefig(path, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
     # round coordinates to 0.1 px: same picture, smaller files, stable diffs
-    head, body = open(path).read().split("</metadata>", 1)
-    open(path, "w").write(head + "</metadata>" + re.sub(r"(-?\d+\.\d)\d+", r"\1", body))
-    print("wrote", name)
+    head, body = path.read_text().split("</metadata>", 1)
+    path.write_text(head + "</metadata>" + re.sub(r"(-?\d+\.\d)\d+", r"\1", body))
+    log.info("wrote %s", path)
 
 
-def zone_gap():
-    m = pd.read_csv(os.path.join(RES, "metrics.csv"))
-    ta = pd.read_csv(os.path.join(RES, "metrics_topology_aware.csv"))
+def zone_gap(paths: Paths):
+    m = pd.read_csv(paths.results / "metrics.csv")
+    ta = pd.read_csv(paths.results / "metrics_topology_aware.csv")
     z = m[(m.task == "zone") & (m.protocol == "loto")]
     rand = m[(m.task == "zone") & (m.protocol == "random")].acc.max()
     topos = list(TOPO_LABEL)
-    series = [("Random forest", z[z.model == "RandomForest"]), ("Gradient boosting", z[z.model == "HistGradBoost"]),
-              ("MLP", z[z.model == "MLP"]), ("Topology-aware (this repo)", ta)]
+    series = [(lab, z[z.model == m]) for m, lab in MODEL_LABELS.items()] + [("Topology-aware (this repo)", ta)]
     fig, ax = plt.subplots(figsize=(9, 4.2))
     w = 0.2
     x = np.arange(len(topos))
@@ -64,12 +62,12 @@ def zone_gap():
     ax.set_ylabel("Fault-zone accuracy on the unseen layout (%)")
     ax.set_title("Zone localisation when the grid layout was never seen in training", loc="left", color=INK, fontsize=11)
     ax.legend(frameon=False, ncol=3, fontsize=8.5, loc="lower center", bbox_to_anchor=(0.5, -0.38))
-    save(fig, "zone_generalisation.svg")
+    save(fig, paths.figures / "zone_generalisation.svg")
 
 
-def fdia():
-    a = pd.read_csv(os.path.join(RES, "fdia.csv"))
-    v = pd.read_csv(os.path.join(RES, "fdia_resilient_vote.csv"))
+def fdia(paths: Paths):
+    a = pd.read_csv(paths.results / "fdia.csv")
+    v = pd.read_csv(paths.results / "fdia_resilient_vote.csv")
     fig, ax = plt.subplots(figsize=(7, 3.8))
     t = a[a.attacker == "targeted"].sort_values("k")
     base = a[a.attacker == "-"]
@@ -85,17 +83,16 @@ def fdia():
     ax.set_title("Fake-fault (spoofing) attack: false trips", loc="left", color=INK, fontsize=11)
     ax.set_xticks(ks)
     ax.legend(frameon=False, fontsize=8.5, loc="lower right")
-    save(fig, "fdia_false_trips.svg")
+    save(fig, paths.figures / "fdia_false_trips.svg")
 
 
-def feeder_map():
+def feeder_map(paths: Paths):
     """Hand-written compact SVG (the matplotlib version is ~50 KB)."""
-    from sim import I_SENSORS, V_SENSORS, compute_zones
-    import opendssdirect as dss
-    coords = pd.read_csv(os.path.join(ROOT, "feeder", "BusCoords.dat"), sep=r"[\s,]+", header=None,
+    coords = pd.read_csv(FEEDER_DIR / "BusCoords.dat", sep=r"[\s,]+", header=None,
                          names=["bus", "x", "y"], engine="python", dtype={"bus": str})
     coords["bus"] = coords.bus.str.lower()
     zones = compute_zones()
+    compile_feeder("T0_base")
     xy = coords.set_index("bus")[["x", "y"]]
     x0, x1, y0, y1 = xy.x.min(), xy.x.max(), xy.y.min(), xy.y.max()
     W, PAD, TOP = 620, 20, 40
@@ -106,8 +103,7 @@ def feeder_map():
     for name in dss.Circuit.AllElementNames():
         if not name.lower().startswith(("line.", "transformer.")):
             continue
-        dss.Circuit.SetActiveElement(name)
-        b = [s.split(".")[0].lower() for s in dss.CktElement.BusNames()]
+        b = element_buses(name)
         b = [q[:-1] if q not in xy.index and q.endswith("r") else q for q in b]
         if len(b) == 2 and all(q in xy.index for q in b) and b[0] != b[1]:
             (ax_, ay), (bx, by) = P(b[0]), P(b[1])
@@ -127,9 +123,7 @@ def feeder_map():
     o.append(f'<g fill="none" stroke="{INK}" stroke-width="1.5">'
              + "".join(f'<circle cx="{P(b.lower())[0]}" cy="{P(b.lower())[1]}" r="7"/>' for b in V_SENSORS) + "</g>")
     for el in I_SENSORS:
-        dss.Circuit.SetActiveElement(f"Line.{el}")
-        b = [s.split(".")[0].lower() for s in dss.CktElement.BusNames()]
-        b = [q for q in b if q in xy.index]
+        b = [q for q in element_buses(f"Line.{el}") if q in xy.index]
         px = round(np.mean([P(q)[0] for q in b]), 1)
         py = round(np.mean([P(q)[1] for q in b]), 1)
         o.append(f'<rect x="{round(px - 5, 1)}" y="{round(py - 5, 1)}" width="10" height="10" fill="{INK}"/>'
@@ -148,12 +142,13 @@ def feeder_map():
              f'<path d="M{PAD + 320} {ly}h22" stroke="{INK2}" stroke-width="1.6" stroke-dasharray="5 3"/>'
              f'<text x="{PAD + 348}" y="{ly + 4}" font-size="11" fill="{INK}">Normally-open tie switch</text>')
     o.append("</svg>\n")
-    with open(os.path.join(FIG, "feeder_map.svg"), "w") as fh:
-        fh.write("\n".join(o))
-    print("wrote feeder_map.svg")
+    out = paths.figures / "feeder_map.svg"
+    out.write_text("\n".join(o))
+    log.info("wrote %s", out)
 
 
-if __name__ == "__main__":
-    zone_gap()
-    fdia()
-    feeder_map()
+def run(paths: Paths):
+    paths.ensure()
+    zone_gap(paths)
+    fdia(paths)
+    feeder_map(paths)

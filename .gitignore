@@ -6,3 +6,7 @@ feeder/*.dss
 feeder/*.DSS
 feeder/BusCoords.dat
 feeder/LICENSE-OpenDSS.txt
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/

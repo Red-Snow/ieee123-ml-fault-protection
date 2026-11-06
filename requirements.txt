@@ -1,3 +1,4 @@
+# Pinned where results depend on it. Prefer:  pip install -e ".[dev]"
 opendssdirect.py==0.9.4
 numpy>=2.0
 pandas>=2.2
